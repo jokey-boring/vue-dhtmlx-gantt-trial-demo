@@ -1,5 +1,5 @@
 <template>
-  <div style="text-align: center;" id="gantt-container">
+  <!-- <div style="text-align: center;" id="gantt-container">
     <div id="gannt-tool">
       <button style="margin: 5px;" @click="changeView('day')">日视图</button>
       <button style="margin: 5px;" @click="changeView('week')">周视图</button>
@@ -9,12 +9,14 @@
     </div>
     
     <div ref="ganttContainer" style="height: calc(100vh - 33px)"></div>
-  </div>
+  </div> -->
+  <div ref="ganttContainer" style="height: 100%"></div>
 </template>
 
 <script>
 // DHTMLX-GANTT 配置项 中文文档 https://blog.csdn.net/qq_24472595/article/details/81630117
 import { gantt } from 'dhtmlx-gantt';
+import Dayjs from 'dayjs';
 import "dhtmlx-gantt/codebase/skins/dhtmlxgantt_terrace.css";
 // import "dhtmlx-gantt/codebase/skins/dhtmlxgantt_skyblue.css";
 // import "dhtmlx-gantt/codebase/skins/dhtmlxgantt_meadow.css";
@@ -23,6 +25,8 @@ import "dhtmlx-gantt/codebase/skins/dhtmlxgantt_terrace.css";
 // import "dhtmlx-gantt/codebase/skins/dhtmlxgantt_material.css"; 
 
 // import Dayjs from "dayjs";
+
+const toDay = Dayjs().format('YYYYMMDDHHmmss')
 
 // 声明需要加载的插件
 gantt.plugins({
@@ -43,7 +47,7 @@ gantt.plugins({
  * 显示或禁止 显示 甘特图中的 连线(任务之间的关系)
  * 默认值 true
  */
-gantt.config.show_links = true; // 显示连线
+gantt.config.show_links = false; // 显示连线
 
 /**
  * https://docs.dhtmlx.com/gantt/api__gantt_drag_links_config.html
@@ -86,7 +90,7 @@ gantt.config.resize_rows = true;
  * 甘特图自动调整时间范围为了更好的显示所有的 task
  * 默认值 false
  */
-gantt.config.fit_tasks = true; 
+gantt.config.fit_tasks = false; 
 
 // gantt.config.start_on_monday = true;
 
@@ -131,14 +135,31 @@ gantt.config.grid_width = 540;
  * 显示 甘特图的 左侧表格
  * 默认值 true
  */
- gantt.config.show_grid = true;
+gantt.config.show_grid = false;
+
+// gantt.config.bar_height =
 
 /**
  * https://docs.dhtmlx.com/gantt/api__gantt_scale_height_config.html
  * 设置 时间刻度 的高度, 设置后 表格表头的高度会自动改变为一致的 
  * 默认值 35
  */
-gantt.config.scale_height = 60; // 日期栏的高度 
+gantt.config.scale_height = 60; // 日期栏的高度
+gantt.templates.task_class = (start, end, task) => {
+  const formatEnd = Dayjs(end).format('YYYYMMDD')
+  const today = Dayjs().format('YYYYMMDD')
+  if (today > formatEnd && task.progress !== 1) {
+    return 'task-bar-beOverdue'
+  } else {
+    return 'task-bar'
+  }
+}
+
+const levelColor = {
+  '低': '#22cc88',
+  '中': '#fa8c16',
+  '高': '#f55651'
+}
 
 const weekScaleTemplate = function (date) {
   // const mouthMap = {
@@ -165,10 +186,15 @@ const weekScaleTemplate = function (date) {
   // })`;
   return `第${gantt.date.date_to_str('%W')(date)}周`
 };
+
+const monthFormat = function (date) {
+  return `${gantt.date.date_to_str('%n')(date)}月`;
+}
+
 const dayFormat = function (date) {
-  // const weeks = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-  // return `${gantt.date.date_to_str('%n')(date)}-${gantt.date.date_to_str('%d')(date)}, ${weeks[Dayjs(date).day()]}`;
-  return `${gantt.date.date_to_str('%n')(date)}月${gantt.date.date_to_str('%d')(date)}日`;
+  const weeks = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  return `${gantt.date.date_to_str('%d')(date)} ${weeks[Dayjs(date).day()]}`;
+  // return `${gantt.date.date_to_str('%n')(date)}月${gantt.date.date_to_str('%d')(date)}日`;
 };
 
 const daysStyle = function(date){
@@ -176,13 +202,21 @@ const daysStyle = function(date){
     return "weekend";
   }
 };
+
+// 当前日期大于
+const processTaskText = function (end, task) {
+  const endTime = Dayjs(end).format('YYYYMMDDHHmmss')
+  if (toDay > endTime && task.progress !== 1) return '已逾期'
+  // if (toDay > endTime && task.progress === 1) return '已完成'
+  return task.progress === 1 ? '已完成' : '进行中'
+}
 /**
  * https://docs.dhtmlx.com/gantt/api__gantt_scales_config.html
  * 时间 刻度设置 
  */
  gantt.config.scales = [
   { unit: 'year', step: 1, format: '%Y年' },
-  { unit: 'week', step: 1, format: '第%W周' },
+  { unit: 'month', step: 1, format: monthFormat },
   { unit: 'day', step: 1, format: dayFormat, css: daysStyle }
 ];
 
@@ -273,8 +307,43 @@ gantt.attachEvent("onLinkDblClick", function(){
  * 
  */
 
-gantt.templates.task_text=function(start, end, task){
-    return task.WBSName + ' ' + task.text;
+gantt.templates.task_text = function(start, end, task) {
+  // return task.WBSName + ' ' + task.text;
+  return `
+    <span>
+      ${task.text}
+      <span
+        style="
+          color: white;
+          width: 30px;
+          height: 20px;
+          margin-left: 5px;
+          background-color: ${levelColor[task.priority]};
+          display: inline-block;
+          border-radius: 5px;
+          line-height: 20px;
+          text-align: center;
+        "
+      >
+        ${task.priority}
+      </span>
+      <span
+        style="
+          display: inline-block;
+          width: 25px;
+          height:25px;
+          border-radius: 50%;
+          color:white;
+          background-color: #3ea5d4;
+          text-align:center;
+          line-height:25px
+        "
+      >
+        张
+      </span>
+      ${Dayjs(task.start_date).format('MM月DD日 HH:ss')}开始
+      <span style="color: white">(${processTaskText(end, task)})</span>
+    </span>`
 };
 
 gantt.templates.tooltip_text = function (start, end, task) {
@@ -295,12 +364,21 @@ gantt.templates.tooltip_text = function (start, end, task) {
 //   return task.duration + " days";
 // };
 
-gantt.templates.rightside_text = function (start, end, task) {
-  if (task.type == gantt.config.types.milestone) {
-    return task.text;
-  }
-  return task.duration + " 天";
-};
+gantt.templates.rightside_text = function (start, end) {
+  // if (task.type == gantt.config.types.milestone) {
+  //   return task.text;
+  // }
+  // return task.duration + " 天";
+  
+  const finish = Dayjs(end).format('MM月DD日 HH:ss截至')
+  return finish
+}
+
+// gantt.templates.leftside_text = function (start, end, task) {
+//   return `<div>
+//     <div style="display: inline-block;width: 25px;height:25px;border-radius: 50%;color:white;background-color: red;text-align:center;line-height:25px">张</div>${Dayjs(task.start_date).format('MM月DD日 HH:ss')}开始
+//   </div>`
+// }
 
 export default {
   props: {
@@ -384,6 +462,7 @@ export default {
 
     gantt.init(this.$refs.ganttContainer);
     gantt.parse(this.$props.tasks);
+    gantt.scrollTo(0)
 
     this.$_initDataProcessor();
   }
@@ -411,6 +490,36 @@ export default {
 .gantt_row .gantt_cell:not(:last-child),
 .gantt_grid_scale .gantt_grid_head_cell:not(:last-child) {
   border-right: 1px solid #ebebeb !important;
+}
+
+.gantt_task_content {
+  text-align: left;
+  padding-left: 15px;
+  border-radius: 10px;
+}
+
+.gantt_bar_task {
+  border-radius: 7px;
+}
+
+.task-bar {
+  background-color: #aecaf5 !important;
+  border: none;
+}
+
+.task-bar .gantt_task_progress {
+  background-color: #1768e4 !important;
+  border: none;
+}
+
+.task-bar-beOverdue {
+  background-color: #eeae94 !important;
+  border: none
+}
+
+.task-bar-beOverdue  .gantt_task_progress {
+  background-color: #e3784d !important;
+  border: none;
 }
 
 /* .week-cell {
